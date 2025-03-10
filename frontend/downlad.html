@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Download</title>
+  <script>
+    async function deriveKey(password) {
+      const encoder = new TextEncoder();
+      const keyMaterial = await window.crypto.subtle.importKey(
+        "raw", encoder.encode(password), {name: "PBKDF2"}, false, ["deriveKey"]
+      );
+      return await window.crypto.subtle.deriveKey(
+        {name: "PBKDF2", salt: new Uint8Array(0), iterations: 100000, hash: "SHA-256"},
+        keyMaterial,
+        {name: "AES-GCM", length: 256},
+        true,
+        ["encrypt", "decrypt"]
+      );
+    }
+
+    async function downloadAndDecrypt() {
+      const passwordInput = document.getElementById('passwordInput').value;
+      const linkInput = document.getElementById('linkInput').value;
+
+      if (passwordInput === "" || linkInput === "") {
+        alert('Bitte das Passwort und den Download-Link eingeben!');
+        return;
+      }
+
+      const response = await fetch(linkInput);
+      if (!response.ok) {
+        alert('Fehler beim Abrufen der Datei!');
+        return;
+      }
+
+      const encryptedData = await response.arrayBuffer();
+      const iv = new Uint8Array(encryptedData.slice(0, 12));
+      const data = new Uint8Array(encryptedData.slice(12));
+
+      const key = await deriveKey(passwordInput);
+
+      try {
+        const decryptedData = await window.crypto.subtle.decrypt(
+          {name: "AES-GCM", iv},
+          key,
+          data
+        );
+
+        const fileBlob = new Blob([decryptedData]);
+        const downloadLink = URL.createObjectURL(fileBlob);
+
+        const a = document.createElement('a');
+        a.href = downloadLink;
+        a.download = "decrypted_file";
+        a.click();
+      } catch (error) {
+        alert('Fehler beim Entschlüsseln der Datei. Überprüfen Sie das Passwort.');
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <h2>Datei sicher herunterladen und entschlüsseln</h2>
+  <label for="linkInput">Download-Link:</label>
+  <input type="text" id="linkInput" placeholder="Download-Link der Datei"><br>
+  <label for="passwordInput">Passwort für Entschlüsselung:</label>
+  <input type="password" id="passwordInput" placeholder="Passwort"><br>
+  <button onclick="downloadAndDecrypt()">Herunterladen und Entschlüsseln</button>
+</body>
+
+</html>

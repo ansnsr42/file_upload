@@ -76,7 +76,7 @@ func main() {
 	os.MkdirAll("storage", os.ModePerm)
 	
 	r := gin.Default()
-	r.Static("/", "./frontend")
+	r.Static("/index", "./frontend")
   r.POST("/upload", uploadFile)
 	r.GET("/download/:token", downloadFile)
 
