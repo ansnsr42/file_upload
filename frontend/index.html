@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sicherer Datei-Upload</title>
+  <script>
+    async function deriveKey(password) {
+      const encoder = new TextEncoder();
+      const keyMaterial = await window.crypto.subtle.importKey(
+        "raw", encoder.encode(password), {name: "PBKDF2"}, false, ["deriveKey"]
+      );
+      return await window.crypto.subtle.deriveKey(
+        {name: "PBKDF2", salt: new Uint8Array(16), iterations: 100000, hash: "SHA-256"},
+        keyMaterial,
+        {name: "AES-GCM", length: 256},
+        true,
+        ["encrypt", "decrypt"]
+      );
+    }
+
+    async function encryptAndUpload() {
+      const fileInput = document.getElementById('fileInput');
+      const passwordInput = document.getElementById('passwordInput').value;
+
+      if (fileInput.files.length === 0 || passwordInput === "") {
+        alert('Bitte eine Datei auswählen und ein Passwort eingeben!');
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const key = await deriveKey(passwordInput);
+
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      const fileData = await file.arrayBuffer();
+      const encryptedData = await window.crypto.subtle.encrypt(
+        {name: "AES-GCM", iv}, key, fileData
+      );
+
+      const formData = new FormData();
+      formData.append("file", new Blob([iv, new Uint8Array(encryptedData)]), file.name + ".enc");
+
+      const response = await fetch("/upload", {method: "POST", body: formData});
+      const result = await response.text();
+
+      document.getElementById('linkContainer').innerHTML = `
+                <p>Download-Link: <a href="${result}" target="_blank">${result}</a></p>
+                <p>Passwort: <code>${passwordInput}</code> (Merken für Entschlüsselung!)</p>
+            `;
+    }
+  </script>
+</head>
+
+<body>
+  <h2>Datei sicher hochladen</h2>
+  <input type="file" id="fileInput"><br>
+  <input type="password" id="passwordInput" placeholder="Passwort für Verschlüsselung"><br>
+  <button onclick="encryptAndUpload()">Hochladen</button>
+  <div id="linkContainer"></div>
+</body>
+
+</html>
